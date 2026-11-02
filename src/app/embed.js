@@ -288,26 +288,47 @@ export function installViews({
   // Lightweight read-only context for the trusted Jarvis parent. Never send
   // provider credentials, feature descriptions, raw media, or unbounded data.
   let lastContextAt = 0;
-  const publishContext = () => {
+  const publishContext = (settled = false) => {
     if (!jarvisBridge) return;
     const now = Date.now();
-    if (now - lastContextAt < 1200 || viewer.isDestroyed?.()) return;
+    if ((!settled && now - lastContextAt < 1200) || viewer.isDestroyed?.()) return;
     lastContextAt = now;
     const camera = viewer.camera?.positionCartographic;
     const degrees = Cesium.Math.toDegrees;
     const lat = camera ? degrees(camera.latitude) : null;
     const lon = camera ? degrees(camera.longitude) : null;
     const altitude_m = camera?.height;
+    // Report the actual ground point in the CENTER of the visible view. The
+    // spacecraft/camera position itself is NOT the map location when tilted.
+    let center = null;
+    try {
+      const canvas = viewer.scene?.canvas;
+      if (canvas && viewer.camera?.pickEllipsoid) {
+        const point = viewer.camera.pickEllipsoid(
+          new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+          viewer.scene?.globe?.ellipsoid,
+        );
+        if (point) {
+          const carto = Cesium.Cartographic.fromCartesian(point);
+          const centerLat = degrees(carto.latitude);
+          const centerLon = degrees(carto.longitude);
+          if (Number.isFinite(centerLat) && Number.isFinite(centerLon))
+            center = { lat: centerLat, lon: centerLon,
+              altitude_m: Number.isFinite(altitude_m) ? altitude_m : null };
+        }
+      }
+    } catch { /* Fall back to camera position, explicitly without center. */ }
     const layers = dataManager.getAll().filter(layer => layer.enabled)
       .map(layer => String(layer.id).slice(0,60)).slice(0,35);
-    post({type:'gev:context',observedAt:now,
+    post({type:'gev:context',observedAt:now,settled,center,
       camera: Number.isFinite(lat) && Number.isFinite(lon)
         ? {lat,lon,altitude_m:Number.isFinite(altitude_m)?altitude_m:null}
         : null, layers,
       selected:typeof viewer.selectedEntity?.name==='string'
         ? viewer.selectedEntity.name.slice(0,120):null});
   };
-  const removeCameraListener = viewer.camera.changed?.addEventListener(publishContext);
+  const removeCameraListener = viewer.camera.changed?.addEventListener(() => publishContext(false));
+  const removeCameraEndListener = viewer.camera.moveEnd?.addEventListener(() => publishContext(true));
   // Views apply one at a time, in the order they arrive.
   let queue = ready;
   const onMessage = (event) => {
@@ -357,7 +378,7 @@ export function installViews({
         },
         replyOrigin,
       );
-      publishContext();
+      publishContext(true);
     });
   };
   windowRef.addEventListener('message', onMessage);
@@ -370,6 +391,7 @@ export function installViews({
   return () => {
     stopRendering();
     removeCameraListener?.();
+    removeCameraEndListener?.();
     windowRef.removeEventListener('message', onMessage);
   };
 }

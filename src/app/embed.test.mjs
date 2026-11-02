@@ -1,3 +1,4 @@
+import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -425,4 +426,35 @@ test('Jarvis reconnects the embedded globe after late iframe load and restores i
   assert.equal(viewer.flights.length,1,'Jarvis device/home coordinates applied');
   assert.ok(replies.some(r=>r.message.type==='gev:view-applied'&&r.message.id==='home'&&r.message.ok));
   remove();
+});
+
+
+test('Jarvis receives the visible ground center only once camera movement has settled', async () => {
+  const posted=[];
+  const parent={postMessage:(message)=>posted.push(message)};
+  const windowRef=new EventTarget();
+  windowRef.parent=parent;
+  windowRef.document={body:{classList:{add(){}}}};
+  let moveEnd=()=>{};
+  let changed=()=>{};
+  const viewer=fakeViewer();
+  viewer.camera.positionCartographic=Cesium.Cartographic.fromDegrees(11.07,49.45,35000);
+  viewer.camera.changed={addEventListener(fn){changed=fn;return ()=>{};}};
+  viewer.camera.moveEnd={addEventListener(fn){moveEnd=fn;return ()=>{};}};
+  viewer.camera.pickEllipsoid=()=>Cesium.Cartesian3.fromDegrees(11.58,48.14);
+  viewer.scene={canvas:{clientWidth:300,clientHeight:400},
+    globe:{ellipsoid:Cesium.Ellipsoid.WGS84}};
+  const {run}=recorder();
+  const dispose=installViews({shell:{initialRestorePromise:Promise.resolve(),setCleanView(){}},
+    viewer,dataManager:fakeLayers(new Set()),run,
+    location:{search:'?embed=1&jarvis=1',hash:''},windowRef});
+  await new Promise(resolve=>setTimeout(resolve,5));
+  moveEnd();
+  const settled=posted.findLast(x=>x.type==='gev:context'&&x.settled===true);
+  assert.ok(settled,'a final camera message is emitted');
+  assert.ok(Math.abs(settled.center.lat-48.14)<0.001);
+  assert.ok(Math.abs(settled.center.lon-11.58)<0.001);
+  assert.equal(settled.center.altitude_m,35000);
+  assert.ok(Math.abs(settled.camera.lat-49.45)<0.001);
+  dispose();
 });
