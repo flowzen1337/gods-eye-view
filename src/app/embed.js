@@ -311,8 +311,20 @@ export function installViews({
   // Views apply one at a time, in the order they arrive.
   let queue = ready;
   const onMessage = (event) => {
-    if (event.source !== peer || event.data?.type !== EMBED_VIEW_MESSAGE)
+    if (event.source !== peer) return;
+    // Recover a missed startup handshake after an iframe navigation. Only the
+    // Jarvis opt-in embed is allowed to respond to this extra message.
+    if (jarvisBridge && event.data?.type === 'gev:request-ready') {
+      void ready.then(() => {
+        if (!signal?.aborted) {
+          const destination = event.origin && event.origin !== 'null' ? event.origin : '*';
+          post({ type: EMBED_READY_MESSAGE }, destination);
+          publishContext();
+        }
+      });
       return;
+    }
+    if (event.data?.type !== EMBED_VIEW_MESSAGE) return;
     const { id = null } = event.data;
     const replyOrigin =
       isEmbeddedInline() || !event.origin || event.origin === 'null'

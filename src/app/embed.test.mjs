@@ -393,3 +393,36 @@ test('a followed aircraft owns the camera, and cockpit view is entered after it'
     /no cockpit view/,
   );
 });
+
+test('Jarvis reconnects the embedded globe after late iframe load and restores its location view', async () => {
+  const replies = [];
+  const parent = {postMessage:(message,origin)=>replies.push({message,origin})};
+  const windowRef=new EventTarget();
+  windowRef.parent=parent;
+  windowRef.document={body:{classList:{add(){}}}};
+  const viewer=fakeViewer();
+  const {run}=recorder();
+  const remove=installViews({
+    shell:{initialRestorePromise:Promise.resolve(),setCleanView(){}},
+    viewer,dataManager:fakeLayers(new Set()),run,
+    location:{search:'?embed=1&jarvis=1',hash:''},
+    windowRef,
+  });
+  await new Promise(resolve=>setTimeout(resolve,0));
+  const event=new Event('message');
+  Object.assign(event,{source:parent,origin:'https://jarvis.bot-coin.com',
+    data:{type:'gev:request-ready'}});
+  windowRef.dispatchEvent(event);
+  await new Promise(resolve=>setTimeout(resolve,0));
+  const ready=replies.filter(r=>r.message.type==='gev:ready');
+  assert.equal(ready.length,2,'initial ready plus the requested retry');
+  assert.equal(ready[1].origin,'https://jarvis.bot-coin.com');
+  const home=new Event('message');
+  Object.assign(home,{source:parent,origin:'https://jarvis.bot-coin.com',
+    data:{type:'gev:view',id:'home',view:{camera:{lat:49.45,lon:11.07,altitude_m:45000},layers:['earthquakes']}}});
+  windowRef.dispatchEvent(home);
+  await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(viewer.flights.length,1,'Jarvis device/home coordinates applied');
+  assert.ok(replies.some(r=>r.message.type==='gev:view-applied'&&r.message.id==='home'&&r.message.ok));
+  remove();
+});
