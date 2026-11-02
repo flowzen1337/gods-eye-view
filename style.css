@@ -37,3 +37,6 @@
 @import './src/ui/styles/mobile-shell.css';
 @import './src/ui/styles/annotations.css';
 @import './src/ui/styles/cyber.css';
+
+/* Only the embedded Jarvis advanced console uses this accessibility layout. */
+@import './src/ui/styles/jarvis-embed.css';

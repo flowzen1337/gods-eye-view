@@ -1,0 +1,33 @@
+/* Accessible full-console controls in Jarvis. Leave the standalone application untouched. */
+body.ui-jarvis-full {
+  --panel-surface-width: clamp(330px,27vw,460px);
+  --dock-label-font-size: 11px;
+}
+body.ui-jarvis-full #right-context-rail,
+body.ui-jarvis-full #left-panel-stack {
+  zoom: 1.12;
+  max-height: min(85vh,920px);
+}
+body.ui-jarvis-full :is(#right-context-rail,#left-panel-stack) [data-panel-surface] {
+  font-size: 13px;
+  line-height: 1.5;
+}
+body.ui-jarvis-full :is(#right-context-rail,#left-panel-stack) :is(button,input,select,textarea) {
+  min-height: 28px;
+  font-size: max(12px,0.78rem);
+}
+body.ui-jarvis-full #command-dock,
+body.ui-jarvis-full #corner-actions,
+body.ui-jarvis-full #view-switcher {zoom:1.12;}
+body.ui-jarvis-full :is(#command-dock,#corner-actions,#view-switcher) button {min-width:33px;min-height:33px;}
+body.ui-jarvis-full .panel-header {font-size:13px;}
+@media(max-width:900px){
+ body.ui-jarvis-full #right-context-rail,
+ body.ui-jarvis-full #left-panel-stack {zoom:1.03;max-height:70vh}
+ body.ui-jarvis-full #command-dock {zoom:1}
+}
+@media(prefers-reduced-motion:reduce){
+ body.ui-jarvis-full :is(#right-context-rail,#left-panel-stack) * {
+  scroll-behavior:auto;
+ }
+}

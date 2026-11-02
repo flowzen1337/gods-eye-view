@@ -266,7 +266,9 @@ export function installViews({
   // Jarvis can embed the full console at fullscreen size while retaining the
   // same trusted postMessage view controller. The default embed stays globe-only.
   const jarvisFull = new URLSearchParams(location?.search || '').get('jarvis_full') === '1';
-  if (!jarvisFull) {
+  if (jarvisFull) {
+    windowRef.document.body.classList.add('ui-jarvis-full');
+  } else {
     windowRef.document.body.classList.add('ui-embed');
     shell.setCleanView?.(true);
   }
