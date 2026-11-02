@@ -1,3 +1,4 @@
+import { hideSimulatedVehiclePositions } from './provenance.js';
 import { observeTrafficSurface } from './surface.js';
 import * as Cesium from 'cesium';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
@@ -84,7 +85,9 @@ export function createLifecycle({
       if (layerState._roadMode !== 'tomtom') source.prefetch?.();
       parts.animation.syncRenderDemand();
       layerState._lastAnimTime = 0;
-      layerState._pointCollection.show = true;
+      // Road geometry / TomTom flow is not a feed of actual vehicle positions.
+      // No synthetic motion dots are visible in the Jarvis embed.
+      layerState._pointCollection.show = !hideSimulatedVehiclePositions();
 
       layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
         parts.animation.animate,

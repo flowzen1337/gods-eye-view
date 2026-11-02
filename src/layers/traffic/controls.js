@@ -1,3 +1,4 @@
+import { hideSimulatedVehiclePositions } from './provenance.js';
 import {
   normalizeRoadMode,
   resolveRoadMode,
@@ -211,6 +212,9 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
      */
     getDetectableObjects(options = {}) {
+      // VEH- IDs are simulated dots based on road geometry, never live GPS.
+      // In Jarvis live intelligence mode they must not be detectable targets.
+      if (hideSimulatedVehiclePositions()) return [];
       if (!layerState._enabled || layerState._dots.length === 0) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
