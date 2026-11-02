@@ -263,8 +263,13 @@ export function installViews({
     });
   if (!isEmbedded(location)) return () => {};
 
-  windowRef.document.body.classList.add('ui-embed');
-  shell.setCleanView?.(true);
+  // Jarvis can embed the full console at fullscreen size while retaining the
+  // same trusted postMessage view controller. The default embed stays globe-only.
+  const jarvisFull = new URLSearchParams(location?.search || '').get('jarvis_full') === '1';
+  if (!jarvisFull) {
+    windowRef.document.body.classList.add('ui-embed');
+    shell.setCleanView?.(true);
+  }
   const stopRendering = isEmbeddedInline()
     ? keepPanelRendering(viewer, { windowRef })
     : () => {};
@@ -277,6 +282,30 @@ export function installViews({
     if (peer && (peer !== windowRef || isEmbeddedInline()))
       peer.postMessage(message, origin);
   };
+  const jarvisBridge = new URLSearchParams(location?.search || '').get('jarvis') === '1';
+  // Lightweight read-only context for the trusted Jarvis parent. Never send
+  // provider credentials, feature descriptions, raw media, or unbounded data.
+  let lastContextAt = 0;
+  const publishContext = () => {
+    if (!jarvisBridge) return;
+    const now = Date.now();
+    if (now - lastContextAt < 1200 || viewer.isDestroyed?.()) return;
+    lastContextAt = now;
+    const camera = viewer.camera?.positionCartographic;
+    const degrees = Cesium.Math.toDegrees;
+    const lat = camera ? degrees(camera.latitude) : null;
+    const lon = camera ? degrees(camera.longitude) : null;
+    const altitude_m = camera?.height;
+    const layers = dataManager.getAll().filter(layer => layer.enabled)
+      .map(layer => String(layer.id).slice(0,60)).slice(0,35);
+    post({type:'gev:context',observedAt:now,
+      camera: Number.isFinite(lat) && Number.isFinite(lon)
+        ? {lat,lon,altitude_m:Number.isFinite(altitude_m)?altitude_m:null}
+        : null, layers,
+      selected:typeof viewer.selectedEntity?.name==='string'
+        ? viewer.selectedEntity.name.slice(0,120):null});
+  };
+  const removeCameraListener = viewer.camera.changed?.addEventListener(publishContext);
   // Views apply one at a time, in the order they arrive.
   let queue = ready;
   const onMessage = (event) => {
@@ -314,14 +343,19 @@ export function installViews({
         },
         replyOrigin,
       );
+      publishContext();
     });
   };
   windowRef.addEventListener('message', onMessage);
   void ready.then(() => {
-    if (!signal?.aborted) post({ type: EMBED_READY_MESSAGE });
+    if (!signal?.aborted) {
+      post({ type: EMBED_READY_MESSAGE });
+      publishContext();
+    }
   });
   return () => {
     stopRendering();
+    removeCameraListener?.();
     windowRef.removeEventListener('message', onMessage);
   };
 }
