@@ -14,6 +14,7 @@
 import * as Cesium from 'cesium';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
 import { annotationsFromParams, createView } from '../view/index.js';
+import { installJarvisNewsMarkers, acceptsJarvisNewsMessage } from './jarvisNewsMarkers.js';
 
 const EMBED_VIEW_MESSAGE = 'gev:view';
 const EMBED_APPLIED_MESSAGE = 'gev:view-applied';
@@ -285,6 +286,10 @@ export function installViews({
       peer.postMessage(message, origin);
   };
   const jarvisBridge = new URLSearchParams(location?.search || '').get('jarvis') === '1';
+  const newsOverlay = jarvisBridge && viewer.dataSources?.add &&
+    viewer.scene?.canvas && (viewer.container || viewer.scene.canvas.parentElement)
+    ? installJarvisNewsMarkers(viewer, { windowRef })
+    : null;
   // Lightweight read-only context for the trusted Jarvis parent. Never send
   // provider credentials, feature descriptions, raw media, or unbounded data.
   let lastContextAt = 0;
@@ -332,6 +337,10 @@ export function installViews({
   // Views apply one at a time, in the order they arrive.
   let queue = ready;
   const onMessage = (event) => {
+    if (newsOverlay && acceptsJarvisNewsMessage(event, peer)) {
+      newsOverlay.set(event.data.markers);
+      return;
+    }
     if (event.source !== peer) return;
     // Recover a missed startup handshake after an iframe navigation. Only the
     // Jarvis opt-in embed is allowed to respond to this extra message.
@@ -390,6 +399,7 @@ export function installViews({
   });
   return () => {
     stopRendering();
+    newsOverlay?.destroy();
     removeCameraListener?.();
     removeCameraEndListener?.();
     windowRef.removeEventListener('message', onMessage);
